@@ -1,5 +1,7 @@
 // Copyright 2017 - Kirk Shoop
-// see License.txt
+// see LICENSE
+
+#pragma once
 
 #include <exception>
 #include <new>

@@ -19,21 +19,21 @@ int main() {
         single_transform([](int i){ return std::to_string(i); }) |
         single_produce_on(std::launch::async);
 
-#if 0    
+#if 1
     auto l = string_answer | 
         single_subscribe(single<single_ostream>{single_ostream{std::cout}});
 
     l.stop();
 #endif
 
-#if 1
+#if 0
     string_answer | 
         single_subscribe(single<single_ostream>{single_ostream{std::cout}});
 
     std::this_thread::sleep_for(2s);
 #endif
 
-#if 0
+#if 1
     string_answer | 
         single_tap(single<single_ostream>{single_ostream{std::cout}}) |
         single_wait();

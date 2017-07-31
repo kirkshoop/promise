@@ -1,3 +1,8 @@
+// Copyright 2017 - Kirk Shoop
+// see LICENSE
+
+#pragma once
+
 namespace detail {
 
 struct produce_on_async_context : token_lifetime_context
@@ -17,7 +22,7 @@ struct produce_on_async_state : std::enable_shared_from_this<produce_on_async_st
 
     template<typename Context>
     void start(Context&& c) const {
-        l.i.set([]{c.get_lifetime();});
+        l.i.set([c]{c.get_lifetime();});
         single_context<produce_on_async_context> myc{produce_on_async_context{make_token_lifetime(this->shared_from_this(), this->l)}};
         out = [this, myc](){
             return single_enforcer<S, single_context<produce_on_async_context>>{this->s, myc};
