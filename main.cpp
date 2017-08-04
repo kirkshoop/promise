@@ -7,13 +7,15 @@
 
 int main() {
 
-    auto int_answer = single_create([](auto s){
+    auto int_answer = single_create([](auto&& s){
         std::this_thread::sleep_for(1s);
         s.value(42);
     });
 
+#if 1
     int_answer | 
         single_subscribe(single<single_ostream>{single_ostream{std::cout}});
+#endif
 
     auto string_answer = int_answer | 
         single_transform([](int i){ return std::to_string(i); }) |

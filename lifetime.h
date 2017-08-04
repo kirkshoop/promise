@@ -3,60 +3,6 @@
 
 #pragma once
 
-template<typename L>
-struct unique_stop;
-
-template<typename L>
-struct unique_stop<lifetime<L>>
-{
-    ~unique_stop() { if (!!l) { l->stop(); } }
-
-    explicit unique_stop(const lifetime<L>& l) : l(std::addressof(l)) {}
-
-    void dismiss() { l = nullptr; }
-
-    const lifetime<L>* l = nullptr;
-};
-
-template<typename C>
-struct unique_stop<single_context<C>>
-{
-    using L = decltype(std::addressof(std::declval<single_context<C>>().get_lifetime()));
-
-    ~unique_stop() { if (!!l) { l->stop(); } }
-
-    explicit unique_stop(const single_context<C>& c) : l(std::addressof(c.get_lifetime())) {}
-
-    void dismiss() { l = nullptr; }
-
-    L l = nullptr;
-};
-
-template<typename S, typename C>
-struct single_enforcer;
-
-template<typename S, typename C>
-struct single_enforcer<single<S>, single_context<C>>
-{
-    single_enforcer(single<S> s, single_context<C> c) : s(std::move(s)), c(std::move(c)) {
-        this->s.start(this->c);
-    }
-    single<S> s;
-    single_context<C> c;
-    template<typename V>
-    void value(V&& v) const {
-        if (c.get_lifetime().is_stopped()) { return; }
-        unique_stop<single_context<C>> g(c);
-        s.value(std::forward<V>(v)); 
-    }
-    template<typename E>
-    void error(E&& e) const {
-        if (c.get_lifetime().is_stopped()) { return; }
-        unique_stop<single_context<C>> g(c);
-        s.error(std::forward<E>(e)); 
-    }
-};
-
 struct unique_lifetime
 {
     unique_lifetime() = default;
@@ -81,7 +27,9 @@ struct unique_lifetime
                 auto expired = std::move(dostop);
                 dostop = nullptr;
                 guard.unlock();
-                dostop();
+                if (!!expired) {
+                    expired();
+                }
             }
         }
     }
@@ -125,3 +73,97 @@ lifetime<token_lifetime> make_token_lifetime(const std::shared_ptr<T>& o, lifeti
     auto aliased = std::shared_ptr<lifetime<L>>{o, std::addressof(l)};
     return lifetime<token_lifetime>{token_lifetime{aliased}};
 }
+
+template<typename T>
+auto nest_lifetime(const lifetime<token_lifetime>& l, T& t) {
+    auto aliased = std::shared_ptr<T>{l.i.l.lock(), std::addressof(t)};
+    return aliased;
+}
+
+template<typename L>
+struct unique_stop;
+
+template<typename L>
+struct unique_stop<lifetime<L>>
+{
+    ~unique_stop() { if (!!l ) { l->stop(); } }
+
+    explicit unique_stop(const lifetime<L>& l) : l(std::addressof(l)) {}
+
+    void dismiss() { l = nullptr; }
+
+    const lifetime<L>* l = nullptr;
+};
+
+template<typename C>
+struct unique_stop<single_context<C>>
+{
+    using L = decltype(std::declval<single_context<C>>().get_lifetime());
+    L l;
+
+    ~unique_stop() { if (!!lp) { lp->stop(); } }
+
+    explicit unique_stop(const single_context<C>& c) : l(c.get_lifetime()), lp(std::addressof(l)) {}
+
+    void dismiss() { lp = nullptr; }
+
+    L* lp = nullptr;
+};
+
+struct cancellation_error : std::runtime_error
+{
+    template<class... AN>
+    cancellation_error(AN&&... an) : std::runtime_error(std::forward<AN>(an)...) {} 
+};
+
+template<typename S>
+struct single_enforcer;
+
+template<typename S>
+struct single_enforcer<single<S>>
+{
+    using this_type = single_enforcer<single<S>>;
+    
+    single_enforcer(single<S> s) : s(std::move(s)), canceled(true) {}
+    single<S> s;
+    lifetime<unique_lifetime> myl;
+    lifetime<token_lifetime> l;
+    mutable bool canceled;
+
+    template<typename C>
+    void start(C&& c) {
+        l = c.get_lifetime();
+        myl.i.set([this](){
+            this->l.stop();
+            if (canceled) {
+                this->s.error(std::make_exception_ptr<cancellation_error>("canceled"));
+            }
+        });
+        auto nested = nest_lifetime(l, *this);
+        single_context<token_lifetime_context> myc{{make_token_lifetime(nested, myl)}};
+        s.start(myc);
+    }
+
+    template<typename V>
+    void value(V&& v) const {
+        if (myl.is_stopped()) { return; }
+        canceled = false;
+        unique_stop<lifetime<token_lifetime>> g(l);
+        try {
+            s.value(std::forward<V>(v)); 
+        } catch(...) { 
+            this->error(std::current_exception());
+        }
+    }
+    template<typename E>
+    void error(E&& e) const {
+        if (myl.is_stopped()) { return; }
+        canceled = false;
+        unique_stop<lifetime<token_lifetime>> g(l);
+        try {
+            s.error(std::forward<E>(e)); 
+        } catch(...) {
+            std::terminate();
+        }
+    }
+};

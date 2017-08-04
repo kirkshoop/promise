@@ -32,3 +32,5 @@
 *.app
 
 unix/
+build/
+.vscode/

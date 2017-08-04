@@ -34,7 +34,14 @@ template<typename Inner>
 struct single_context
 {
     Inner i;
-    const auto& get_lifetime() const { return i.get_lifetime(); }
+    auto get_lifetime() const { return i.get_lifetime(); }
+};
+
+template<typename InnerPtr>
+struct single_context_ptr
+{
+    InnerPtr i;
+    auto get_lifetime() const { return i->get_lifetime(); }
 };
 
 template<typename Inner>
@@ -89,6 +96,15 @@ auto single_subscribe(single<Inner> s) {
         return in.subscribe(s);
     };
 }
+
+std::ostream& operator<< (std::ostream& o, std::exception_ptr ep) {
+    std::string s;
+    try { std::rethrow_exception(ep); }
+    catch(const std::exception& e) { s = e.what(); }
+    catch(...) { s = "<not derived from std::exception>"; }
+    return o << s;
+}
+
 
 struct single_ostream
 {

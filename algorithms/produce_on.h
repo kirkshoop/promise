@@ -5,37 +5,29 @@
 
 namespace detail {
 
-struct produce_on_async_context : token_lifetime_context
-{
-    explicit produce_on_async_context(const lifetime<token_lifetime>& l) : 
-        token_lifetime_context(token_lifetime_context{l}) {}
-};
-
 template<typename S>
 struct produce_on_async_state : std::enable_shared_from_this<produce_on_async_state<S>>
 {
-    produce_on_async_state(S s) : s(std::move(s)) {}
-    S s;
+    produce_on_async_state(S s) : 
+        out(std::move(s)) {}
+
     mutable lifetime<unique_lifetime> l;
     mutable std::future<void> result;
-    mutable std::function<single_enforcer<S, single_context<produce_on_async_context>>()> out;
+    mutable single_enforcer<S> out;
 
     template<typename Context>
     void start(Context&& c) const {
-        l.i.set([c]{c.get_lifetime();});
-        single_context<produce_on_async_context> myc{produce_on_async_context{make_token_lifetime(this->shared_from_this(), this->l)}};
-        out = [this, myc](){
-            return single_enforcer<S, single_context<produce_on_async_context>>{this->s, myc};
-        };
-        s.start(myc);
+        l.i.set(c.get_lifetime());
+        single_context<token_lifetime_context> myc{{make_token_lifetime(this->shared_from_this(), l)}};
+        out.start(myc);
     }
     template<typename V>
     void value(V&& v) const {
-        out().value(std::forward<V>(v));
+        out.value(std::forward<V>(v));
     }
     template<typename E>
     void error(E&& e) const {
-        out().error(std::forward<E>(e));
+        out.error(std::forward<E>(e));
     }
 };
 

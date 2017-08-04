@@ -32,6 +32,8 @@ set(SHARED_COMPILE_FEATURES
     cxx_nullptr
     cxx_decltype
     cxx_lambdas
+    cxx_lambda_init_captures
+    cxx_generic_lambdas
     cxx_range_for
     cxx_return_type_deduction
     cxx_right_angle_brackets

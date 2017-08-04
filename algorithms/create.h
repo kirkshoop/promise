@@ -5,18 +5,14 @@
 
 namespace detail {
 
-struct create_state
+template<typename S>
+struct create_state : std::enable_shared_from_this<create_state<S>>
 {
+    explicit create_state(S s) : 
+        l(), 
+        out(std::move(s)) {}
     lifetime<unique_lifetime> l;
-};
-
-struct create_context : token_lifetime_context
-{
-    std::shared_ptr<create_state> state;
-
-    create_context(const std::shared_ptr<create_state>& state, const lifetime<token_lifetime>& l) : 
-        token_lifetime_context(token_lifetime_context{l}), 
-        state(state) {}
+    single_enforcer<S> out;
 };
 
 template<typename P>
@@ -26,12 +22,12 @@ struct create_inner
 
     template<typename S>
     auto subscribe(S&& s) const {
-        auto state = std::make_shared<create_state>();
-        single_context<create_context> c{create_context{state, make_token_lifetime(state, state->l)}};
-        single_enforcer<std::decay_t<S>, single_context<create_context>> out{
-            std::forward<S>(s), c
-        };
-        p(out);
+        using enforcer = single_enforcer<std::decay_t<S>>;
+        auto state = std::make_shared<create_state<std::decay_t<S>>>(std::forward<S>(s));
+        auto c = single_context<token_lifetime_context>{{make_token_lifetime(state, state->l)}};
+        state->out.start(c);
+        single<single_ptr<std::shared_ptr<enforcer>>> out{single_ptr<std::shared_ptr<enforcer>>{nest_lifetime(c.get_lifetime(), state->out)}};
+        p(std::move(out));
         return c;
     }
 };
