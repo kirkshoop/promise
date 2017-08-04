@@ -5,6 +5,11 @@
 #include "lifetime.h"
 #include "algorithms.h"
 
+#include "promise_1.h"
+#include "promise_2.h"
+
+#include "packaged_task.h"
+
 int main() {
 
     auto int_answer = single_create([](auto&& s){
@@ -40,6 +45,63 @@ int main() {
         single_tap(single<single_ostream>{single_ostream{std::cout}}) |
         single_wait();
 
-    return 0;
 #endif
+
+#if 1
+    {
+        using namespace promise_1;
+
+        promise<int> p{[](auto v, auto ){
+            std::this_thread::sleep_for(1s);
+            v(42);
+        }};
+
+        p
+            .then([](int v){ return std::to_string(v); })
+            .then([](std::string s){ std::cout << s << std::endl; return 0; })
+            .wait();
+    }
+#endif
+
+#if 1
+    {
+        using namespace promise_2;
+
+        promise<int> p;
+        
+        std::thread t([p]() mutable {
+            std::this_thread::sleep_for(1s);
+            p.set_value(42);
+        });
+
+        p.get_future()
+            .then([](int v){ return std::to_string(v); })
+            .then([](std::string s){ std::cout << s << std::endl; return 0; })
+            .wait();
+
+        t.join();
+    }
+#endif
+
+    {
+        using namespace packaged_task;
+
+        packaged_task<int()> p{[]() {
+            std::this_thread::sleep_for(1s);
+            return 42;
+        }};
+
+        auto f = p.get_future();
+
+        std::thread t(std::move(p));
+
+        f
+            .then([](int v){ return std::to_string(v); })
+            .then([](std::string s){ std::cout << s << std::endl; return 0; })
+            .wait();
+
+        t.join();
+    }
+
+    return 0;
 }

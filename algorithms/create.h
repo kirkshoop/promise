@@ -28,7 +28,7 @@ struct create_inner
         state->out.start(c);
         single<single_ptr<std::shared_ptr<enforcer>>> out{single_ptr<std::shared_ptr<enforcer>>{nest_lifetime(c.get_lifetime(), state->out)}};
         p(std::move(out));
-        return c;
+        return c.get_lifetime();
     }
 };
 

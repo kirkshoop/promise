@@ -30,10 +30,12 @@ auto single_wait() {
     return [](auto in){
         detail::wait_state state{};
 
-        in.subscribe(single<single_ptr<detail::wait_state*>>{single_ptr<detail::wait_state*>{std::addressof(state)}});
+        auto l = in.subscribe(single<single_ptr<detail::wait_state*>>{single_ptr<detail::wait_state*>{std::addressof(state)}});
 
         std::unique_lock<std::mutex> guard(state.lock);
-        state.complete.wait(guard);
+        state.complete.wait(guard, [l](){
+            return l.is_stopped();
+        });
         if (!!state.ep) { std::rethrow_exception(state.ep); }
     };
 }

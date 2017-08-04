@@ -90,6 +90,16 @@ struct single_deferred
     }
 };
 
+template<typename InnerPtr>
+struct single_deferred_ptr
+{
+    InnerPtr i;
+    template<typename S>
+    auto subscribe(S&& s) const { 
+        return i->subscribe(std::forward<S>(s)); 
+    }
+};
+
 template<typename Inner>
 auto single_subscribe(single<Inner> s) {
     return [s](auto in){
